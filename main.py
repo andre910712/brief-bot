@@ -12,6 +12,7 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ASSISTANT_ID = os.getenv("ASSISTANT_ID")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 openai.api_key = OPENAI_API_KEY
@@ -21,7 +22,7 @@ user_states = {}
 user_answers = {}
 user_resume = {}
 
-csv_path = "brief_data.csv" 
+csv_path = "brief_data.csv"
 
 questions = [
     ["1.1", "Чем вы занимаетесь?"],
@@ -123,10 +124,9 @@ def handle_answer(message):
         bot.send_message(user_id, f"Ваши ответы:\n\n{summary}")
         del user_answers[user_id]
 
-# Flask webhook
 @app.route('/', methods=['GET'])
 def index():
-    return 'Бот работает'
+    return 'Бот работает!'
 
 @app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
 def webhook():
@@ -135,9 +135,7 @@ def webhook():
     bot.process_new_updates([update])
     return '', 200
 
-# Установка webhook при запуске
 if __name__ == '__main__':
-    WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # пример: https://brief-bot.onrender.com/ВАШ_ТОКЕН
     bot.remove_webhook()
     bot.set_webhook(url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}")
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
