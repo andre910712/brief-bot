@@ -1,4 +1,3 @@
-
 import telebot
 import openai
 import os
@@ -6,6 +5,7 @@ import time
 import csv
 from datetime import datetime
 from dotenv import load_dotenv
+from flask import Flask, request
 
 load_dotenv()
 
@@ -15,12 +15,13 @@ ASSISTANT_ID = os.getenv("ASSISTANT_ID")
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 openai.api_key = OPENAI_API_KEY
+app = Flask(__name__)
 
 user_states = {}
 user_answers = {}
 user_resume = {}
 
-csv_path = "brief_data.csv"
+csv_path = "brief_data.csv" 
 
 questions = [
     ["1.1", "Чем вы занимаетесь?"],
@@ -46,7 +47,6 @@ questions = [
     ["10.0", "Ваши контактные данные (телефон, почта или ник в Telegram)?"]
 ]
 
-
 def save_to_csv(user_id, question, answer):
     with open(csv_path, mode="a", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
@@ -60,10 +60,7 @@ def gpt_help(text, current_question):
             role="user",
             content=f"Помоги заполнить бриф: {current_question}\nПользователь написал: {text}"
         )
-        run = openai.beta.threads.runs.create(
-            thread_id=thread.id,
-            assistant_id=ASSISTANT_ID
-        )
+        run = openai.beta.threads.runs.create(thread_id=thread.id, assistant_id=ASSISTANT_ID)
         while True:
             run_status = openai.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
             if run_status.status == "completed":
@@ -77,23 +74,23 @@ def gpt_help(text, current_question):
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = message.chat.id
-    if user_id in user_states and user_states[user_id] != None:
+    if user_id in user_states and user_states[user_id] is not None:
         bot.send_message(user_id, "Вы уже начали заполнение. Напишите /resume чтобы продолжить.")
         return
     user_states[user_id] = 0
     user_answers[user_id] = []
     user_resume[user_id] = 0
-    bot.send_message(user_id, "👋 Привет! Я умный бот со встроенным ChatGPT. Если вам будет сложно с каким-то вопросом — просто напишите 'не знаю', 'нужна помощь' или 'не понимаю' — и я помогу 🙂")
-    bot.send_message(user_id, questions[0])
+    bot.send_message(user_id, "👋 Привет! Я умный бот со встроенным ChatGPT. Просто отвечай на вопросы. Если нужно — напиши 'не знаю', 'помощь' или 'не понимаю'.")
+    bot.send_message(user_id, questions[0][1])
 
 @bot.message_handler(commands=['resume'])
 def resume(message):
     user_id = message.chat.id
     if user_id in user_resume:
         user_states[user_id] = user_resume[user_id]
-        bot.send_message(user_id, f"Продолжаем с вопроса {questions[user_states[user_id]]}")
+        bot.send_message(user_id, f"Продолжаем с вопроса: {questions[user_states[user_id]][1]}")
     else:
-        bot.send_message(user_id, "Нет данных для восстановления. Напишите /start чтобы начать заново.")
+        bot.send_message(user_id, "Нет данных для восстановления. Напиши /start чтобы начать заново.")
 
 @bot.message_handler(func=lambda m: True)
 def handle_answer(message):
@@ -105,7 +102,7 @@ def handle_answer(message):
         return
 
     text = message.text.strip().lower()
-    current_question = questions[step]
+    current_question = questions[step][1]
 
     if "помощь" in text or "не знаю" in text or "не понимаю" in text or "?" in text:
         hint = gpt_help(message.text, current_question)
@@ -118,15 +115,29 @@ def handle_answer(message):
 
     if step + 1 < len(questions):
         user_states[user_id] += 1
-        bot.send_message(user_id, questions[step + 1])
+        bot.send_message(user_id, questions[step + 1][1])
     else:
-        bot.send_message(user_id, "✅ Бриф завершён! Спасибо 🙌\nВсе ответы сохранены.\nСкоро дизайнер изучит информацию и свяжется с вами.\nЕсли хотите что-то добавить — просто напишите Андрею в личное сообщение в телеграмм или вацап.")
+        bot.send_message(user_id, "✅ Бриф завершён! Спасибо 🙌")
         user_states[user_id] = None
-        summary = "\n".join(
-            f"{questions[i]}\nОтвет: {user_answers[user_id][i]}\n"
-            for i in range(len(questions))
-        )
+        summary = "\n".join(f"{questions[i][1]}\nОтвет: {user_answers[user_id][i]}" for i in range(len(questions)))
         bot.send_message(user_id, f"Ваши ответы:\n\n{summary}")
         del user_answers[user_id]
 
-bot.polling()
+# Flask webhook
+@app.route('/', methods=['GET'])
+def index():
+    return 'Бот работает'
+
+@app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
+def webhook():
+    json_str = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return '', 200
+
+# Установка webhook при запуске
+if __name__ == '__main__':
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # пример: https://brief-bot.onrender.com/ВАШ_ТОКЕН
+    bot.remove_webhook()
+    bot.set_webhook(url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}")
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
