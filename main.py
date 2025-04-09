@@ -20,7 +20,7 @@ user_states = {}
 user_answers = {}
 user_resume = {}
 
-csv_path = os.path.join(os.path.expanduser("~"), "Desktop", "brief_data.csv")
+csv_path = "brief_data.csv"
 
 questions = [
     ["1.1", "Чем вы занимаетесь?"],
