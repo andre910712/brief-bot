@@ -1,11 +1,11 @@
+from flask import Flask, request
+from dotenv import load_dotenv
 import telebot
 import openai
 import os
 import time
 import csv
 from datetime import datetime
-from dotenv import load_dotenv
-from flask import Flask, request
 
 load_dotenv()
 
@@ -95,7 +95,6 @@ def resume(message):
 
 @bot.message_handler(func=lambda m: True)
 def handle_answer(message):
-        print(f"[LOG] Получено сообщение от {message.chat.id}: {message.text}")
     user_id = message.chat.id
     step = user_states.get(user_id)
 
